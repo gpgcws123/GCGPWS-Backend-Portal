@@ -14,7 +14,7 @@ const newsEventSchema = new mongoose.Schema({
   },
   description: {
     type: String,
-    required: true
+    required: false
   },
   content: {
     type: String,
@@ -22,9 +22,12 @@ const newsEventSchema = new mongoose.Schema({
   },
   date: {
     type: Date,
-    required: true
+    required: false
   },
   image: {
+    type: String
+  },
+  video: {
     type: String
   },
   venue: {

@@ -13,10 +13,13 @@ const academicRoutes = require('./routes/academicRoutes');
 const facilityRoutes = require('./routes/facilityRoutes');
 const facilityHeroRoutes = require('./routes/facilityHeroRoutes');
 const newsEventRoutes = require('./routes/newsEventRoutes');
+const newsHeroRoutes = require('./routes/newsHeroRoutes');
 const studentPortalRoutes = require('./routes/studentPortalRoutes');
+const academicHeroRoutes = require('./routes/academicHeroRoutes');
+const admissionHeroRoutes = require('./routes/admissionHeroRoutes');
 
 const app = express();
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 5000;
 
 // Initialize Firebase Admin
 try {
@@ -92,27 +95,30 @@ app.use('/api/academic', academicRoutes);
 app.use('/api/facility', facilityRoutes);
 app.use('/api/facility-hero', facilityHeroRoutes);
 app.use('/api/news-events', newsEventRoutes);
+app.use('/api/hero-section', newsHeroRoutes);
 app.use('/api/student-portal', studentPortalRoutes);
+app.use('/api/academic-hero', academicHeroRoutes);
+app.use('/api/admission-hero', admissionHeroRoutes);
 
 // TinyMCE API key middleware
 app.use((req, res, next) => {
-  res.header('X-TinyMCE-API-Key', 'kgpqgw1s9eih5wsa0zyh7vz5god2gdybhz7wlnq8ojbnzl57');
-  next();
+    res.header('X-TinyMCE-API-Key', 'kgpqgw1s9eih5wsa0zyh7vz5god2gdybhz7wlnq8ojbnzl57');
+    next();
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    success: false,
-    error: 'Something went wrong!'
-  });
+    console.error(err.stack);
+    res.status(500).json({
+        success: false,
+        error: 'Something went wrong!'
+    });
 });
 
 // Handle undefined routes
 app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: 'Route not found'
-  });
+    res.status(404).json({
+        success: false,
+        error: 'Route not found'
+    });
 });

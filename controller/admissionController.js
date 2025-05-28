@@ -1,6 +1,8 @@
 const Admission = require('../models/Admission');
 const Notification = require('../models/Notification');
 const emailService = require('../utlies/emailService');
+const fs = require('fs');
+const path = require('path');
 
 // Submit new admission application
 exports.submitAdmission = async (req, res) => {
@@ -244,5 +246,123 @@ exports.getAdmissionStats = async (req, res) => {
             message: 'Failed to fetch admission statistics',
             error: error.message
         });
+    }
+};
+
+// Get admission content by type
+exports.getAdmissionContent = async (req, res) => {
+    try {
+        const { type } = req.query;
+        const query = type ? { type } : {};
+        const content = await Admission.find(query).sort({ createdAt: -1 });
+        res.json({ success: true, data: content });
+    } catch (error) {
+        console.error('Error fetching admission content:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Create admission content
+exports.createAdmissionContent = async (req, res) => {
+    try {
+        if (req.fileValidationError) {
+            return res.status(400).json({ success: false, error: req.fileValidationError });
+        }
+
+        const { title, description, content, type, startDate, endDate, seats, duration } = req.body;
+        
+        const newContent = new Admission({
+            title,
+            description,
+            content,
+            type,
+            startDate: startDate ? new Date(startDate) : undefined,
+            endDate: endDate ? new Date(endDate) : undefined,
+            seats,
+            duration,
+            image: req.file ? `/uploads/admissions/${req.file.filename}` : undefined
+        });
+
+        const savedContent = await newContent.save();
+        res.status(201).json({ success: true, data: savedContent });
+    } catch (error) {
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        console.error('Error creating admission content:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Update admission content
+exports.updateAdmissionContent = async (req, res) => {
+    try {
+        if (req.fileValidationError) {
+            return res.status(400).json({ success: false, error: req.fileValidationError });
+        }
+
+        const { title, description, content, type, startDate, endDate, seats, duration } = req.body;
+        const contentToUpdate = await Admission.findById(req.params.id);
+
+        if (!contentToUpdate) {
+            if (req.file) {
+                fs.unlinkSync(req.file.path);
+            }
+            return res.status(404).json({ success: false, message: 'Content not found' });
+        }
+
+        // Delete old image if new one is uploaded
+        if (req.file && contentToUpdate.image) {
+            const oldImagePath = path.join(__dirname, '..', contentToUpdate.image);
+            if (fs.existsSync(oldImagePath)) {
+                fs.unlinkSync(oldImagePath);
+            }
+        }
+
+        contentToUpdate.title = title;
+        contentToUpdate.description = description;
+        contentToUpdate.content = content;
+        contentToUpdate.type = type;
+        contentToUpdate.startDate = startDate ? new Date(startDate) : undefined;
+        contentToUpdate.endDate = endDate ? new Date(endDate) : undefined;
+        contentToUpdate.seats = seats;
+        contentToUpdate.duration = duration;
+        if (req.file) {
+            contentToUpdate.image = `/uploads/admissions/${req.file.filename}`;
+        }
+
+        const updatedContent = await contentToUpdate.save();
+        res.json({ success: true, data: updatedContent });
+    } catch (error) {
+        if (req.file) {
+            fs.unlinkSync(req.file.path);
+        }
+        console.error('Error updating admission content:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Delete admission content
+exports.deleteAdmissionContent = async (req, res) => {
+    try {
+        const content = await Admission.findById(req.params.id);
+        
+        if (!content) {
+            return res.status(404).json({ success: false, message: 'Content not found' });
+        }
+
+        // Delete associated image
+        if (content.image) {
+            const imagePath = path.join(__dirname, '..', content.image);
+            if (fs.existsSync(imagePath)) {
+                fs.unlinkSync(imagePath);
+            }
+        }
+
+        await content.deleteOne();
+        res.json({ success: true, message: 'Content deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting admission content:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 };

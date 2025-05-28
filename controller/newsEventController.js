@@ -1,4 +1,15 @@
 const NewsEvent = require('../models/NewsEvent');
+const fs = require('fs');
+const path = require('path');
+
+// Helper function to delete file
+const deleteFile = (filePath) => {
+  if (!filePath) return;
+  const fullPath = path.join(__dirname, '..', filePath);
+  if (fs.existsSync(fullPath)) {
+    fs.unlinkSync(fullPath);
+  }
+};
 
 // Create new news/event
 exports.create = async (req, res) => {
@@ -10,6 +21,10 @@ exports.create = async (req, res) => {
       data: newsEvent
     });
   } catch (error) {
+    // Delete uploaded files if save fails
+    if (req.body.image) deleteFile(req.body.image);
+    if (req.body.video) deleteFile(req.body.video);
+
     res.status(400).json({
       success: false,
       error: error.message
@@ -22,7 +37,7 @@ exports.getAll = async (req, res) => {
   try {
     const { type, status, startDate, endDate } = req.query;
     const query = {};
-    
+
     if (type) query.type = type;
     if (status) query.status = status;
     if (startDate || endDate) {
@@ -31,7 +46,7 @@ exports.getAll = async (req, res) => {
       if (endDate) query.date.$lte = new Date(endDate);
     }
 
-    const newsEvents = await NewsEvent.find(query).sort({ date: -1 });
+    const newsEvents = await NewsEvent.find(query).sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       count: newsEvents.length,
@@ -67,6 +82,11 @@ exports.getOne = async (req, res) => {
   }
 };
 
+// Find by ID (helper method)
+exports.findById = async (id) => {
+  return await NewsEvent.findById(id);
+};
+
 // Update news/event
 exports.update = async (req, res) => {
   try {
@@ -75,17 +95,27 @@ exports.update = async (req, res) => {
       { ...req.body, updatedAt: Date.now() },
       { new: true, runValidators: true }
     );
+
     if (!newsEvent) {
+      // Delete uploaded files if update fails
+      if (req.body.image) deleteFile(req.body.image);
+      if (req.body.video) deleteFile(req.body.video);
+
       return res.status(404).json({
         success: false,
         error: 'News/Event not found'
       });
     }
+
     res.status(200).json({
       success: true,
       data: newsEvent
     });
   } catch (error) {
+    // Delete uploaded files if update fails
+    if (req.body.image) deleteFile(req.body.image);
+    if (req.body.video) deleteFile(req.body.video);
+
     res.status(400).json({
       success: false,
       error: error.message
@@ -96,13 +126,21 @@ exports.update = async (req, res) => {
 // Delete news/event
 exports.delete = async (req, res) => {
   try {
-    const newsEvent = await NewsEvent.findByIdAndDelete(req.params.id);
+    const newsEvent = await NewsEvent.findById(req.params.id);
+
     if (!newsEvent) {
       return res.status(404).json({
         success: false,
         error: 'News/Event not found'
       });
     }
+
+    // Delete associated files
+    if (newsEvent.image) deleteFile(newsEvent.image);
+    if (newsEvent.video) deleteFile(newsEvent.video);
+
+    await newsEvent.deleteOne();
+
     res.status(200).json({
       success: true,
       data: {}
@@ -113,4 +151,4 @@ exports.delete = async (req, res) => {
       error: error.message
     });
   }
-}; 
+};

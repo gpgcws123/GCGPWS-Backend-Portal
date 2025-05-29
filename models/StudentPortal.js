@@ -3,46 +3,45 @@ const mongoose = require('mongoose');
 const studentPortalSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: true,
-    trim: true
+    required: [true, 'Title is required']
   },
   type: {
     type: String,
-    required: true,
-    enum: ['notes', 'lecture', 'book'],
-    default: 'notes'
-  },
-  subject: {
-    type: String,
-    required: true
+    required: [true, 'Type is required'],
+    enum: ['book', 'note', 'lecture']
   },
   description: {
     type: String,
-    required: true
+    default: ''
   },
-  content: {
-    type: String
-  },
-  fileUrl: {
+  image: {
     type: String,
-    required: true
+    required: [true, 'Image is required']
   },
-  semester: {
+  file: {
     type: String,
-    required: true
+    required: [true, 'File is required']
   },
-  department: {
+  author: {
     type: String,
-    required: true
+    default: ''
   },
-  uploadedBy: {
+  subject: {
     type: String,
-    required: true
+    default: ''
   },
-  status: {
+  category: {
     type: String,
-    enum: ['active', 'inactive'],
-    default: 'active'
+    default: ''
+  },
+  duration: {
+    type: Number,
+    default: 0
+  },
+  level: {
+    type: String,
+    enum: ['Intermediate', 'Graduate', 'Post Graduate', ''],
+    default: ''
   },
   createdAt: {
     type: Date,
@@ -52,6 +51,12 @@ const studentPortalSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+});
+
+// Update the updatedAt field before saving
+studentPortalSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
 });
 
 module.exports = mongoose.model('StudentPortal', studentPortalSchema); 

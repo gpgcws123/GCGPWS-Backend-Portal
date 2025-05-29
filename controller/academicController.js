@@ -64,13 +64,28 @@ exports.getAll = async (req, res) => {
 // Get single academic item
 exports.getOne = async (req, res) => {
   try {
-    const academic = await Academic.findById(req.params.id);
+    let academic;
+    const { id } = req.params;
+
+    // Check if the id parameter matches any of the valid types
+    if (['department', 'program', 'faculty'].includes(id)) {
+      // If it's a type, get all items of that type
+      academic = await Academic.find({ type: id });
+      return res.status(200).json({
+        success: true,
+        data: academic
+      });
+    }
+
+    // Otherwise, try to find by ID
+    academic = await Academic.findById(id);
     if (!academic) {
       return res.status(404).json({
         success: false,
         error: 'Academic item not found'
       });
     }
+
     res.status(200).json({
       success: true,
       data: academic

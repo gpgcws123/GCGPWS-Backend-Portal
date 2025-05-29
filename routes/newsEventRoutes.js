@@ -93,7 +93,29 @@ const handleUpload = (req, res, next) => {
 router.post('/', newsEventController.create);
 router.get('/', newsEventController.getAll);
 router.get('/:id', newsEventController.getOne);
-router.put('/:id', newsEventController.update);
+router.put('/:id', handleUpload, async (req, res) => {
+  try {
+    const id = req.params.id;
+
+    // Handle new files
+    if (req.files) {
+      // Delete old files before updating
+      await deleteOldFiles(id);
+
+      if (req.files.image) {
+        req.body.image = '/uploads/cultural/' + req.files.image[0].filename;
+      }
+    }
+
+    await newsEventController.update(req, res);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error updating item',
+      error: error.message
+    });
+  }
+});
 router.delete('/:id', newsEventController.delete);
 
 // Explicit News routes
@@ -162,34 +184,6 @@ router.post('/cultural/create', handleUpload, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error creating cultural activity',
-      error: error.message
-    });
-  }
-});
-
-router.put('/cultural/:id', handleUpload, async (req, res) => {
-  try {
-    const id = req.params.id;
-    req.body.type = 'cultural';
-
-    // Handle new files
-    if (req.files) {
-      // Delete old files before updating
-      await deleteOldFiles(id);
-
-      if (req.files.video) {
-        req.body.video = '/uploads/cultural/' + req.files.video[0].filename;
-      }
-      if (req.files.image) {
-        req.body.image = '/uploads/cultural/' + req.files.image[0].filename;
-      }
-    }
-
-    await newsEventController.update(req, res);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Error updating cultural activity',
       error: error.message
     });
   }

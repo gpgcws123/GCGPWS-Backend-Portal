@@ -90,22 +90,34 @@ exports.findById = async (id) => {
 // Update news/event
 exports.update = async (req, res) => {
   try {
-    const newsEvent = await NewsEvent.findByIdAndUpdate(
-      req.params.id,
-      { ...req.body, updatedAt: Date.now() },
-      { new: true, runValidators: true }
-    );
-
-    if (!newsEvent) {
+    // Find the existing record first
+    const existingRecord = await NewsEvent.findById(req.params.id);
+    if (!existingRecord) {
       // Delete uploaded files if update fails
       if (req.body.image) deleteFile(req.body.image);
-      if (req.body.video) deleteFile(req.body.video);
-
       return res.status(404).json({
         success: false,
         error: 'News/Event not found'
       });
     }
+
+    // Prepare update data
+    const updateData = {
+      ...req.body,
+      updatedAt: Date.now()
+    };
+
+    // If no new image is provided, keep the existing one
+    if (!req.body.image && existingRecord.image) {
+      updateData.image = existingRecord.image;
+    }
+
+    // Update the record
+    const newsEvent = await NewsEvent.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
 
     res.status(200).json({
       success: true,
@@ -114,7 +126,6 @@ exports.update = async (req, res) => {
   } catch (error) {
     // Delete uploaded files if update fails
     if (req.body.image) deleteFile(req.body.image);
-    if (req.body.video) deleteFile(req.body.video);
 
     res.status(400).json({
       success: false,

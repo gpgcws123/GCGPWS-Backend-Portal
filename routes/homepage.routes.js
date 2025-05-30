@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const homepageController = require('../controller/homepage.controller'); // Adjusted path
+const homepageController = require('../controller/homepage.controller');
 const multer = require('multer');
 const path = require('path');
+
+// Serve static files from uploads directory
+router.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 // Configure multer storage for item images within the controller or here if needed separately
 // const itemStorage = multer.diskStorage({ ... });
@@ -13,7 +16,7 @@ router.get('/:section', homepageController.getHomepageSection);
 
 // Route to update data for a specific homepage section
 // Use the file upload middleware before the controller function
-router.put('/:section', homepageController.handleFileUpload, homepageController.updateHomepageSection);
+router.post('/:section', homepageController.handleFileUpload, homepageController.updateHomepageSection);
 
 // Note: Routes for adding/deleting individual items (stats, topstories, etc.) 
 // might be needed if the frontend doesn't send the whole array on update.

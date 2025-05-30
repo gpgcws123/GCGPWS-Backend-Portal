@@ -8,24 +8,57 @@ const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadPath = path.join(__dirname, '..', 'uploads');
     // Create uploads directory if it doesn't exist
-    if (!fs.existsSync(uploadPath)){
-        fs.mkdirSync(uploadPath);
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath);
     }
-    cb(null, 'uploads/');
+    // Create section-specific subdirectory
+    const section = req.params.section;
+    const sectionPath = path.join(uploadPath, section);
+    if (!fs.existsSync(sectionPath)) {
+      fs.mkdirSync(sectionPath);
+    }
+    // Return relative path for storage
+    cb(null, `uploads/${section}`);
   },
   filename: function (req, file, cb) {
-    // Use original filename with a timestamp to avoid conflicts
-    cb(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+    // Generate a unique filename with section, field name, timestamp and original extension
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   }
 });
 
-const upload = multer({ storage: storage });
+// File filter to only allow images
+const fileFilter = (req, file, cb) => {
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Not an image! Please upload an image file.'), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  }
+});
 
 // Helper function to handle single image upload
 const uploadSingleImage = upload.single('image');
 
 // Helper function to handle multiple image uploads (for hero section)
-const uploadMultipleImages = upload.array('images', 5); // Allow up to 5 images
+const uploadMultipleImages = upload.array('images[]', 5); // Allow up to 5 images
+
+// Helper function to handle item image uploads
+const uploadItemImages = upload.fields([
+  { name: 'itemImage_0', maxCount: 1 },
+  { name: 'itemImage_1', maxCount: 1 },
+  { name: 'itemImage_2', maxCount: 1 },
+  { name: 'itemImage_3', maxCount: 1 },
+  { name: 'itemImage_4', maxCount: 1 }
+]);
 
 // Middleware to handle file uploads before processing the main request
 const handleFileUpload = (req, res, next) => {
@@ -38,22 +71,27 @@ const handleFileUpload = (req, res, next) => {
             } else if (err) {
                 return res.status(500).json({ success: false, message: err.message });
             }
-            // Files are uploaded, proceed to controller logic
             next();
         });
-    } else if (['principal', 'stats', 'topstories', 'whychooseus', 'noticeboard'].includes(section)) {
-        // For sections that might have individual item images or a single section image
-        // We'll handle item images within the update logic
-         uploadSingleImage(req, res, function (err) {
-             if (err instanceof multer.MulterError) {
-                 return res.status(500).json({ success: false, message: err.message });
-             } else if (err) {
-                 return res.status(500).json({ success: false, message: err.message });
-             }
-             next();
-         });
+    } else if (['topstories', 'whychooseus', 'stats', 'noticeboard'].includes(section)) {
+        uploadItemImages(req, res, function (err) {
+            if (err instanceof multer.MulterError) {
+                return res.status(500).json({ success: false, message: err.message });
+            } else if (err) {
+                return res.status(500).json({ success: false, message: err.message });
+            }
+            next();
+        });
+    } else if (section === 'principal') {
+        uploadSingleImage(req, res, function (err) {
+            if (err instanceof multer.MulterError) {
+                return res.status(500).json({ success: false, message: err.message });
+            } else if (err) {
+                return res.status(500).json({ success: false, message: err.message });
+            }
+            next();
+        });
     } else {
-        // No file upload expected for this section
         next();
     }
 };
@@ -85,109 +123,214 @@ const getHomepageSection = async (req, res) => {
   }
 };
 
-// Update homepage section data
+// Update homepage section
 const updateHomepageSection = async (req, res) => {
-  const section = req.params.section;
-  const updates = req.body;
+    try {
+        const section = req.params.section;
+        const updates = req.body;
+        let homepageData = await Homepage.findOne();
 
-  try {
-    let homepageData = await Homepage.findOne();
-
-    if (!homepageData) {
-      return res.status(404).json({ success: false, message: 'Homepage data not found' });
-    }
-
-    // Check if the requested section exists in the schema
-    if (homepageData[section] === undefined) {
-      return res.status(404).json({ success: false, message: 'Section not found in data model' });
-    }
-
-    // Handle updates based on section type
-    if (section === 'hero') {
-      // Handle multiple image uploads for hero section
-      if (req.files && req.files.length > 0) {
-        // Add new image paths to the existing images array
-        const newImagePaths = req.files.map(file => file.path);
-        homepageData.hero.images = [...(homepageData.hero.images || []), ...newImagePaths];
-      }
-      // Update title if provided
-      if (updates.title !== undefined) {
-        homepageData.hero.title = updates.title;
-      }
-       // Note: Deleting images for hero section would need a separate route or logic
-
-    } else if (['stats', 'topstories', 'whychooseus', 'noticeboard'].includes(section)) {
-      // Handle sections with multiple items (including stats)
-
-        // Update header fields if provided
-        if (updates.title !== undefined) {
-            homepageData[section].title = updates.title;
-        }
-        if (updates.description !== undefined) {
-             homepageData[section].description = updates.description;
+        if (!homepageData) {
+            homepageData = new Homepage();
         }
 
-       // Handle items array - this assumes the frontend sends the entire updated items array
-       // Need to parse the JSON string sent from the frontend
-        if (updates.items) {
+        // Initialize section if it doesn't exist
+        if (!homepageData[section]) {
+            homepageData[section] = {
+                title: '',
+                description: '',
+                items: []
+            };
+        }
+        // Initialize items array if it doesn't exist
+        if (!homepageData[section].items) {
+            homepageData[section].items = [];
+        }
+
+        // Handle file uploads based on section
+        if (section === 'hero' && req.files) {
+            const newImagePaths = req.files.map(file => file.path);
+            homepageData.hero.images = [...(homepageData.hero.images || []), ...newImagePaths];
+        } else if (['topstories', 'whychooseus', 'stats', 'noticeboard'].includes(section)) {
             try {
-                const updatedItems = JSON.parse(updates.items);
-                 // Basic validation to ensure it's an array
-                 if(Array.isArray(updatedItems)){
-                      // You might need to handle image uploads for individual items here
-                      // This would require a more complex update logic or separate item endpoints
-                      // For now, we'll just save the item data assuming image paths are correctly handled by frontend or separate uploads
-                     homepageData[section].items = updatedItems;
-                 } else {
-                      console.error('Items update is not an array:', updates.items);
-                 }
+                console.log('Raw updates:', updates);
+                console.log('Raw items:', updates.items);
+                
+                if (!updates.items) {
+                    return res.status(400).json({ success: false, message: 'No items data provided' });
+                }
+                
+                let updatedItems;
+                try {
+                    updatedItems = JSON.parse(updates.items);
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    return res.status(400).json({ success: false, message: 'Invalid JSON format for items' });
+                }
+                
+                if (Array.isArray(updatedItems)) {
+                    // Process each item's image if it exists in the file uploads
+                    updatedItems.forEach((item, index) => {
+                        const imageField = `itemImage_${index}`;
+                        if (req.files && req.files[imageField] && req.files[imageField][0]) {
+                            item.image = req.files[imageField][0].path;
+                        }
+                    });
+                    
+                    // Update the section's items
+                    homepageData[section].items = updatedItems;
+                } else {
+                    console.error('Items update is not an array:', updates.items);
+                }
             } catch (e) {
                 console.error('Failed to parse items JSON:', e);
+                return res.status(400).json({ success: false, message: 'Invalid items data' });
+            }
+        } else if (req.file) {
+            // For single file uploads in other sections
+            switch (section) {
+                case 'principal':
+                    homepageData.principal.image = req.file.path;
+                    break;
+                case 'stats':
+                    homepageData.stats.image = req.file.path;
+                    break;
+                case 'noticeboard':
+                    homepageData.noticeboard.image = req.file.path;
+                    break;
+                default:
+                    break;
             }
         }
 
-    } else if (section === 'principal') {
-        // Handle single image upload for principal section
-        if (req.file) {
-            // Delete old image if it exists
-            if (homepageData.principal.image) {
-                const oldImagePath = path.join(__dirname, '..', homepageData.principal.image);
-                if (fs.existsSync(oldImagePath)) {
-                    fs.unlinkSync(oldImagePath);
+        // Update section data
+        switch (section) {
+            case 'hero':
+                // Handle hero section with multiple images
+                try {
+                    console.log('Updating hero section with files:', req.files);
+                    
+                    // Get existing images
+                    const existingImages = updates.existingImages ? JSON.parse(updates.existingImages) : [];
+                    console.log('Existing images:', existingImages);
+                    
+                    // Process new images
+                    const newImages = req.files ? req.files.map(file => {
+                        console.log('Processing file:', file);
+                        return file.path.replace(/\\/g, '/').replace('uploads/', '');
+                    }) : [];
+                    console.log('New images:', newImages);
+                    
+                    // Combine and limit images
+                    const allImages = [...existingImages, ...newImages];
+                    console.log('All images:', allImages);
+                    
+                    homepageData.hero = {
+                        ...homepageData.hero,
+                        title: updates.title || homepageData.hero.title,
+                        description: updates.description || homepageData.hero.description,
+                        images: allImages
+                    };
+                    console.log('Updated hero data:', homepageData.hero);
+                } catch (error) {
+                    console.error('Error processing hero images:', error);
+                    return res.status(500).json({ success: false, message: 'Error processing hero images' });
                 }
-            }
-            homepageData.principal.image = req.file.path; // Save new image path
+                break;
+
+            case 'principal':
+                homepageData.principal = {
+                    ...homepageData.principal,
+                    title: updates.title || homepageData.principal.title,
+                    subtitle: updates.subtitle || homepageData.principal.subtitle,
+                    description: updates.description || homepageData.principal.description,
+                    image: homepageData.principal.image || ''
+                };
+                break;
+
+            case 'stats':
+                try {
+                    // Parse items if they are sent as a string
+                    const items = typeof updates.items === 'string' ? JSON.parse(updates.items) : updates.items;
+                    
+                    if (Array.isArray(items)) {
+                        // Create a new array to store updated items
+                        const updatedItems = items.map((item, index) => ({
+                            ...item,
+                            // Keep existing image if no new one is uploaded
+                            image: (req.files && req.files[`itemImage_${index}`] && req.files[`itemImage_${index}`][0])
+                                ? req.files[`itemImage_${index}`][0].path
+                                : (item.image || '')
+                        }));
+                        
+                        // Update the section with new data
+                        homepageData.stats = {
+                            ...homepageData.stats,
+                            title: updates.title || homepageData.stats.title,
+                            subtitle: updates.subtitle || homepageData.stats.subtitle,
+                            description: updates.description || homepageData.stats.description,
+                            items: updatedItems
+                        };
+                    }
+                } catch (e) {
+                    console.error('Error processing items:', e);
+                    return res.status(400).json({ success: false, message: 'Invalid items data' });
+                }
+                break;
+
+            case 'topstories':
+            case 'whychooseus':
+            case 'noticeboard':
+                try {
+                    // Parse items if they are sent as a string
+                    const items = typeof updates.items === 'string' ? JSON.parse(updates.items) : updates.items;
+                    
+                    if (Array.isArray(items)) {
+                        // Create a new array to store updated items
+                        const updatedItems = items.map((item, index) => ({
+                            ...item,
+                            // Keep existing image if no new one is uploaded
+                            image: (req.files && req.files[`itemImage_${index}`] && req.files[`itemImage_${index}`][0])
+                                ? req.files[`itemImage_${index}`][0].path
+                                : (item.image || '')
+                        }));
+                        
+                        // Update the section with new data
+                        homepageData[section] = {
+                            ...homepageData[section],
+                            title: updates.title || homepageData[section].title,
+                            subtitle: updates.subtitle || homepageData[section].subtitle,
+                            description: updates.description || homepageData[section].description,
+                            items: updatedItems
+                        };
+                    }
+                } catch (e) {
+                    console.error('Error processing items:', e);
+                    return res.status(400).json({ success: false, message: 'Invalid items data' });
+                }
+                break;
+
+            case 'noticeboard':
+                homepageData.noticeboard = {
+                    ...homepageData.noticeboard,
+                    title: updates.title || homepageData.noticeboard.title,
+                    subtitle: updates.subtitle || homepageData.noticeboard.subtitle,
+                    description: updates.description || homepageData.noticeboard.description,
+                    image: homepageData.noticeboard.image || ''
+                };
+                break;
+
+            default:
+                return res.status(400).json({ success: false, message: 'Invalid section' });
         }
-        // Update title and description if provided
-        if (updates.title !== undefined) {
-            homepageData.principal.title = updates.title;
-        }
-        if (updates.description !== undefined) {
-            homepageData.principal.description = updates.description;
-        }
-    } else {
-        // Handle other sections with title/description only if any exist
-        if (updates.title !== undefined) {
-            homepageData[section].title = updates.title;
-        }
-        if (updates.description !== undefined) {
-            homepageData[section].description = updates.description;
-        }
-         // Assuming other sections don't have images or items handled here
+
+        await homepageData.save();
+        return res.status(200).json({ success: true, data: homepageData });
+
+    } catch (error) {
+        console.error('Error updating homepage section:', error);
+        return res.status(500).json({ success: false, message: error.message });
     }
-
-    // Save the updated homepage document
-    await homepageData.save();
-
-    // Fetch and return the updated data for the specific section
-    const updatedSectionData = homepageData[section];
-    res.status(200).json({ success: true, data: updatedSectionData });
-
-  } catch (error) {
-    console.error('Error updating homepage section:', error);
-    res.status(500).json({ success: false, message: 'Error updating homepage section', error: error.message });
-  }
 };
-
 
 module.exports = { getHomepageSection, updateHomepageSection, handleFileUpload }; 

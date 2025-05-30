@@ -19,6 +19,7 @@ const studentPortalRoutes = require('./routes/studentPortalRoutes');
 const studentPortalHeroRoutes = require('./routes/studentPortalHeroRoutes');
 const academicHeroRoutes = require('./routes/academicHeroRoutes');
 const admissionHeroRoutes = require('./routes/admissionHeroRoutes');
+const contactRoutes = require('./routes/contactRoutes');
 
 // Import homepage routes
 const homepageRoutes = require('./routes/homepage.routes');
@@ -143,6 +144,9 @@ app.use('/api/admission-hero', admissionHeroRoutes);
 
 // Use homepage routes
 app.use('/api/homepage', homepageRoutes);
+
+// Use contact routes
+app.use('/api/contact', contactRoutes);
 
 // TinyMCE API key middleware
 app.use((req, res, next) => {

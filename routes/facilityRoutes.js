@@ -21,4 +21,4 @@ router.get('/:id', facilityController.getOne);
 router.put('/:id', upload.single('image'), facilityController.update);
 router.delete('/:id', facilityController.delete);
 
-module.exports = router; 
+module.exports = router;

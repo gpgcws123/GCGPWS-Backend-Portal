@@ -16,10 +16,6 @@ const facilitySchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  content: {
-    type: String,
-    required: true
-  },
   images: [{
     type: String
   }],
@@ -38,4 +34,4 @@ const facilitySchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('Facility', facilitySchema); 
+module.exports = mongoose.model('Facility', facilitySchema);

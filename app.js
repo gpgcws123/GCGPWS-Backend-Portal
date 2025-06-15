@@ -41,10 +41,10 @@ try {
 // CORS configuration
 const allowedOrigins = ['http://localhost:3000', 'http://localhost:5173'];
 app.use(cors({
-    origin: function(origin, callback) {
+    origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
+
         if (allowedOrigins.indexOf(origin) === -1) {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
             return callback(new Error(msg), false);
@@ -61,9 +61,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
 // Create necessary upload directories
 const createUploadDirs = () => {
     const dirs = [
@@ -71,17 +68,22 @@ const createUploadDirs = () => {
         path.join(__dirname, 'uploads/student-portal'),
         path.join(__dirname, 'uploads/student-portal/book'),
         path.join(__dirname, 'uploads/student-portal/note'),
-        path.join(__dirname, 'uploads/student-portal/lecture')
+        path.join(__dirname, 'uploads/student-portal/lecture'),
+        path.join(__dirname, 'uploads/academic')  // Add academic directory
     ];
-    
+
     dirs.forEach(dir => {
         if (!fs.existsSync(dir)) {
             fs.mkdirSync(dir, { recursive: true });
+            console.log(`Created directory: ${dir}`);
         }
     });
 };
 
 createUploadDirs();
+
+// Serve static files from uploads directory - moved after directory creation
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Database connection
 mongoose.connect(process.env.MONGODB_URI, {

@@ -49,7 +49,11 @@ const upload = multer({
 const uploadSingleImage = upload.single('image');
 
 // Helper function to handle multiple image uploads (for hero section)
-const uploadMultipleImages = upload.array('images[]', 5); // Allow up to 5 images
+// Accept both 'images' and 'images[]' field names for robustness
+const uploadHeroImages = upload.fields([
+  { name: 'images', maxCount: 5 },
+  { name: 'images[]', maxCount: 5 }
+]);
 
 // Helper function to handle item image uploads
 const uploadItemImages = upload.fields([
@@ -65,7 +69,7 @@ const handleFileUpload = (req, res, next) => {
     const section = req.params.section;
 
     if (section === 'hero') {
-        uploadMultipleImages(req, res, function (err) {
+        uploadHeroImages(req, res, function (err) {
             if (err instanceof multer.MulterError) {
                 return res.status(500).json({ success: false, message: err.message });
             } else if (err) {
@@ -147,46 +151,8 @@ const updateHomepageSection = async (req, res) => {
             homepageData[section].items = [];
         }
 
-        // Handle file uploads based on section
-        if (section === 'hero' && req.files) {
-            const newImagePaths = req.files.map(file => file.path);
-            homepageData.hero.images = [...(homepageData.hero.images || []), ...newImagePaths];
-        } else if (['topstories', 'whychooseus', 'stats', 'noticeboard'].includes(section)) {
-            try {
-                console.log('Raw updates:', updates);
-                console.log('Raw items:', updates.items);
-                
-                if (!updates.items) {
-                    return res.status(400).json({ success: false, message: 'No items data provided' });
-                }
-                
-                let updatedItems;
-                try {
-                    updatedItems = JSON.parse(updates.items);
-                } catch (parseError) {
-                    console.error('JSON parse error:', parseError);
-                    return res.status(400).json({ success: false, message: 'Invalid JSON format for items' });
-                }
-                
-                if (Array.isArray(updatedItems)) {
-                    // Process each item's image if it exists in the file uploads
-                    updatedItems.forEach((item, index) => {
-                        const imageField = `itemImage_${index}`;
-                        if (req.files && req.files[imageField] && req.files[imageField][0]) {
-                            item.image = req.files[imageField][0].path;
-                        }
-                    });
-                    
-                    // Update the section's items
-                    homepageData[section].items = updatedItems;
-                } else {
-                    console.error('Items update is not an array:', updates.items);
-                }
-            } catch (e) {
-                console.error('Failed to parse items JSON:', e);
-                return res.status(400).json({ success: false, message: 'Invalid items data' });
-            }
-        } else if (req.file) {
+        // Handle single file uploads (for sections using a single image)
+        if (req.file) {
             // For single file uploads in other sections
             switch (section) {
                 case 'principal':
@@ -210,19 +176,30 @@ const updateHomepageSection = async (req, res) => {
                 try {
                     console.log('Updating hero section with files:', req.files);
                     
-                    // Get existing images
-                    const existingImages = updates.existingImages ? JSON.parse(updates.existingImages) : [];
+                    // Get existing images (should include 'uploads/...')
+                    const existingImages = updates.existingImages ? JSON.parse(updates.existingImages) : (homepageData.hero.images || []);
                     console.log('Existing images:', existingImages);
                     
-                    // Process new images
-                    const newImages = req.files ? req.files.map(file => {
-                        console.log('Processing file:', file);
-                        return file.path.replace(/\\/g, '/').replace('uploads/', '');
-                    }) : [];
+                    // Collect files from both possible field names
+                    const heroFiles = [];
+                    if (req.files) {
+                        if (Array.isArray(req.files)) {
+                            // Safety: if some middleware produced an array
+                            heroFiles.push(...req.files);
+                        } else {
+                            if (req.files['images']) heroFiles.push(...req.files['images']);
+                            if (req.files['images[]']) heroFiles.push(...req.files['images[]']);
+                        }
+                    }
+                    
+                    // Normalize paths and keep '/uploads/...' prefix for static serving
+                    const newImages = heroFiles.map(file => file.path.replace(/\\/g, '/'));
                     console.log('New images:', newImages);
                     
-                    // Combine and limit images
-                    const allImages = [...existingImages, ...newImages];
+                    // Combine, de-duplicate, and limit to 5
+                    const combined = [...existingImages, ...newImages].map(p => p.replace(/\\/g, '/'));
+                    const unique = Array.from(new Set(combined));
+                    const allImages = unique.slice(0, 5);
                     console.log('All images:', allImages);
                     
                     homepageData.hero = {
@@ -259,7 +236,7 @@ const updateHomepageSection = async (req, res) => {
                             ...item,
                             // Keep existing image if no new one is uploaded
                             image: (req.files && req.files[`itemImage_${index}`] && req.files[`itemImage_${index}`][0])
-                                ? req.files[`itemImage_${index}`][0].path
+                                ? req.files[`itemImage_${index}`][0].path.replace(/\\/g, '/')
                                 : (item.image || '')
                         }));
                         
@@ -291,7 +268,7 @@ const updateHomepageSection = async (req, res) => {
                             ...item,
                             // Keep existing image if no new one is uploaded
                             image: (req.files && req.files[`itemImage_${index}`] && req.files[`itemImage_${index}`][0])
-                                ? req.files[`itemImage_${index}`][0].path
+                                ? req.files[`itemImage_${index}`][0].path.replace(/\\/g, '/')
                                 : (item.image || '')
                         }));
                         
@@ -308,16 +285,6 @@ const updateHomepageSection = async (req, res) => {
                     console.error('Error processing items:', e);
                     return res.status(400).json({ success: false, message: 'Invalid items data' });
                 }
-                break;
-
-            case 'noticeboard':
-                homepageData.noticeboard = {
-                    ...homepageData.noticeboard,
-                    title: updates.title || homepageData.noticeboard.title,
-                    subtitle: updates.subtitle || homepageData.noticeboard.subtitle,
-                    description: updates.description || homepageData.noticeboard.description,
-                    image: homepageData.noticeboard.image || ''
-                };
                 break;
 
             default:

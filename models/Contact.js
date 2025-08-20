@@ -22,6 +22,25 @@ const contactSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  // Admin replies to this contact message
+  replies: [
+    new mongoose.Schema({
+      message: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: [2000, 'Reply cannot exceed 2000 characters']
+      },
+      repliedBy: {
+        type: String,
+        default: 'admin'
+      },
+      repliedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }, { _id: false })
+  ]
 }, { timestamps: true });
 
 module.exports = mongoose.model('Contact', contactSchema);

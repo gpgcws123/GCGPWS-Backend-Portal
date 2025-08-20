@@ -142,6 +142,44 @@ exports.sendAcknowledgmentEmail = async (to, data) => {
   }
 };
 
+// Send a reply to a contact message
+exports.sendContactReplyEmail = async (to, data) => {
+  try {
+    const subject = data.subject || 'Reply from GCGPWS College';
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background-color: #003366; padding: 16px; text-align: center; color: white;">
+          <h2>GCGPWS College</h2>
+        </div>
+        <div style="padding: 20px; border: 1px solid #ddd; border-top: none;">
+          <p>Dear ${data.name || 'Student'},</p>
+          <p>Thank you for contacting us. Please find our response below:</p>
+          <div style="background:#f7f7f7; padding: 14px; border-radius: 6px; white-space: pre-wrap;">${(data.reply || '').replace(/</g, '&lt;')}</div>
+          <p style="margin-top:16px;">If you have any further questions, feel free to reply to this email.</p>
+          <p>Best regards,<br/>Support Team<br/>GCGPWS College</p>
+        </div>
+        <div style="background-color: #f0f0f0; padding: 12px; text-align: center; font-size: 12px; color:#666;">
+          <p>This email was sent in response to your contact form submission on our website.</p>
+        </div>
+      </div>
+    `;
+
+    const mailOptions = {
+      from: process.env.EMAIL_FROM || 'GCGPWS College <noreply@gcgpws.edu>',
+      to,
+      subject,
+      html
+    };
+
+    const result = await transporter.sendMail(mailOptions);
+    console.log('Contact reply email sent. Message ID:', result.messageId);
+    return true;
+  } catch (error) {
+    console.error('Error sending contact reply email:', error);
+    return false;
+  }
+};
+
 // Send approval email
 exports.sendApprovalEmail = async (to, data) => {
   try {

@@ -37,12 +37,13 @@ const upload = multer({
 router.post('/submit', admissionController.submitAdmission);
 router.get('/all', admissionController.getAllAdmissions); // New public route for viewing all applications
 router.put('/:id/status', admissionController.updateAdmissionStatus);
+router.delete('/:id', admissionController.deleteAdmission); // Delete admission application
 
 // Content management routes
 router.get('/', admissionController.getAdmissionContent);
 router.post('/', upload.single('image'), admissionController.createAdmissionContent);
 router.put('/:id', upload.single('image'), admissionController.updateAdmissionContent);
-router.delete('/:id', admissionController.deleteAdmissionContent);
+router.delete('/content/:id', admissionController.deleteAdmissionContent);
 
 // Protected routes (not used in simplified version)
 // router.get('/', authMiddleware.verifyAdmin, admissionController.getAllAdmissions);

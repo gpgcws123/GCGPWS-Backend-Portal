@@ -342,6 +342,62 @@ exports.updateAdmissionContent = async (req, res) => {
     }
 };
 
+// Delete an admission application
+exports.deleteAdmission = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const admission = await Admission.findById(id);
+        
+        if (!admission) {
+            return res.status(404).json({
+                success: false,
+                message: 'Admission application not found'
+            });
+        }
+
+        // Delete associated files if they exist
+        const deleteFileIfExists = async (filePath) => {
+            if (filePath) {
+                const fullPath = path.join(__dirname, '..', filePath);
+                if (fs.existsSync(fullPath)) {
+                    fs.unlinkSync(fullPath);
+                }
+            }
+        };
+
+        // Delete all associated files
+        await Promise.all([
+            deleteFileIfExists(admission.photoUrl),
+            deleteFileIfExists(admission.matricMarksheetUrl),
+            deleteFileIfExists(admission.interMarksheetUrl),
+            deleteFileIfExists(admission.idProofUrl)
+        ]);
+
+        // Delete the admission record
+        await Admission.findByIdAndDelete(id);
+
+        // Create notification
+        await new Notification({
+            type: 'admission',
+            message: `Admission application deleted for ${admission.firstName} ${admission.lastName}`,
+            relatedTo: null
+        }).save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Admission application deleted successfully'
+        });
+    } catch (error) {
+        console.error('Error deleting admission application:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete admission application',
+            error: error.message
+        });
+    }
+};
+
 // Delete admission content
 exports.deleteAdmissionContent = async (req, res) => {
     try {

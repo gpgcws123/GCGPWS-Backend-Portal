@@ -94,7 +94,13 @@ exports.submitAdmission = async (req, res) => {
 // Get all admissions (for admin panel)
 exports.getAllAdmissions = async (req, res) => {
     try {
-        const admissions = await Admission.find()
+        // Only fetch actual student applications
+        // - Exclude content entries that have a 'type' field
+        // - Ensure application-like documents (must have firstName)
+        const admissions = await Admission.find({
+            type: { $exists: false },
+            firstName: { $exists: true }
+        })
             .sort({ createdAt: -1 });
 
         res.status(200).json(admissions);
@@ -218,13 +224,16 @@ exports.updateAdmissionStatus = async (req, res) => {
 // Get admission statistics for admin dashboard
 exports.getAdmissionStats = async (req, res) => {
     try {
-        const totalAdmissions = await Admission.countDocuments();
-        const pendingAdmissions = await Admission.countDocuments({ status: 'pending' });
-        const approvedAdmissions = await Admission.countDocuments({ status: 'approved' });
-        const rejectedAdmissions = await Admission.countDocuments({ status: 'rejected' });
+        // Only consider real applications (exclude content entries)
+        const appFilter = { type: { $exists: false }, firstName: { $exists: true } };
+
+        const totalAdmissions = await Admission.countDocuments(appFilter);
+        const pendingAdmissions = await Admission.countDocuments({ ...appFilter, status: 'pending' });
+        const approvedAdmissions = await Admission.countDocuments({ ...appFilter, status: 'approved' });
+        const rejectedAdmissions = await Admission.countDocuments({ ...appFilter, status: 'rejected' });
 
         // Get recent admissions, sorted by creation date
-        const recentAdmissions = await Admission.find()
+        const recentAdmissions = await Admission.find(appFilter)
             .sort({ createdAt: -1 })
             .limit(5)
             .select('firstName lastName course status createdAt');
